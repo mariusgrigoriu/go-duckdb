@@ -158,6 +158,7 @@ func TestAppenderPrimitive(t *testing.T) {
 			int32 INTEGER,
 			uint64 UBIGINT,
 			int64 BIGINT,
+			date DATE,
 			timestamp TIMESTAMP,
 			timestampS TIMESTAMP_S,
 			timestampMS TIMESTAMP_MS,
@@ -179,6 +180,7 @@ func TestAppenderPrimitive(t *testing.T) {
 		Int32       int32
 		UInt64      uint64
 		Int64       int64
+		Date        time.Time
 		Timestamp   time.Time
 		TimestampS  time.Time
 		TimestampMS time.Time
@@ -189,6 +191,8 @@ func TestAppenderPrimitive(t *testing.T) {
 		String      string
 		Bool        bool
 	}
+
+	date := time.Date(2022, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 	// Get the timestamp for all TS columns.
 	IST, err := time.LoadLocation("Asia/Kolkata")
@@ -217,6 +221,7 @@ func TestAppenderPrimitive(t *testing.T) {
 			Int32:       int32(randInt(-2147483648, 2147483647)),
 			UInt64:      u64,
 			Int64:       rand.Int63(),
+			Date:        date,
 			Timestamp:   ts,
 			TimestampS:  ts,
 			TimestampMS: ts,
@@ -238,6 +243,7 @@ func TestAppenderPrimitive(t *testing.T) {
 			rowsToAppend[i].Int32,
 			rowsToAppend[i].UInt64,
 			rowsToAppend[i].Int64,
+			rowsToAppend[i].Date,
 			rowsToAppend[i].Timestamp,
 			rowsToAppend[i].TimestampS,
 			rowsToAppend[i].TimestampMS,
@@ -272,6 +278,7 @@ func TestAppenderPrimitive(t *testing.T) {
 			&r.Int32,
 			&r.UInt64,
 			&r.Int64,
+			&r.Date,
 			&r.Timestamp,
 			&r.TimestampS,
 			&r.TimestampMS,
@@ -647,6 +654,22 @@ func TestAppenderUUID(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
+func TestAppenderDate(t *testing.T) {
+	c, con, a := prepareAppender(t, `CREATE TABLE test (date DATE)`)
+
+	d := time.Date(2022, time.January, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, a.AppendRow(d))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	row := sql.OpenDB(c).QueryRowContext(context.Background(), `SELECT date FROM test`)
+
+	var res time.Time
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, d, res)
+	cleanupAppender(t, c, con, a)
+}
+
 func TestAppenderTime(t *testing.T) {
 	c, con, a := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP)`)
 
@@ -824,6 +847,6 @@ func TestAppenderWithJSON(t *testing.T) {
 
 	require.Equal(t, len(jsonInputs), i)
 
-  require.NoError(t, res.Close())
+	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }

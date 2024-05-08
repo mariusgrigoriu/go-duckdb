@@ -62,6 +62,8 @@ func (vec *vector) tryCast(val any) (any, error) {
 		return tryPrimitiveCast[string](val, reflect.String.String())
 	case C.DUCKDB_TYPE_BLOB:
 		return tryPrimitiveCast[[]byte](val, reflect.TypeOf([]byte{}).String())
+	case C.DUCKDB_TYPE_DATE:
+		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
 	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
 		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ:
 		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
@@ -210,6 +212,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		initPrimitive[bool](vec, C.DUCKDB_TYPE_BOOLEAN)
 	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_BLOB:
 		vec.initCString(duckdbType)
+	case C.DUCKDB_TYPE_DATE:
+		vec.initDate()
 	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
 		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ:
 		vec.initTS(duckdbType)
@@ -289,6 +293,15 @@ func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	C.free(unsafe.Pointer(cStr))
 }
 
+func (vec *vector) setDate(rowIdx C.idx_t, val time.Time) {
+	d := C.duckdb_date_struct{
+		year:  C.int32_t(val.Year()),
+		month: C.int8_t(val.Month()),
+		day:   C.int8_t(val.Day()),
+	}
+	setPrimitive[C.duckdb_date](vec, rowIdx, C.duckdb_to_date(d))
+}
+
 func (vec *vector) setTime(rowIdx C.idx_t, ticks int64) {
 	var ts C.duckdb_timestamp
 	ts.micros = C.int64_t(ticks)
@@ -349,6 +362,19 @@ func (vec *vector) initCString(duckdbType C.duckdb_type) {
 		vec.setCString(rowIdx, val)
 	}
 	vec.duckdbType = duckdbType
+}
+
+func (vec *vector) initDate() {
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+
+		v := val.(time.Time)
+		vec.setDate(rowIdx, v)
+	}
+	vec.duckdbType = C.DUCKDB_TYPE_DATE
 }
 
 func (vec *vector) initTS(duckdbType C.duckdb_type) {
